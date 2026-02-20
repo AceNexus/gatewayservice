@@ -1,0 +1,4 @@
+# 排除所有檔案
+*
+# 只允許建構產出
+!gatewayservice.jar

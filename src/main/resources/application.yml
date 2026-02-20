@@ -1,0 +1,28 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: gatewayservice
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  security:
+    user:
+      name: ${SECURITY_USERNAME}
+      password: ${SECURITY_PASSWORD}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,busrefresh
+
+jwt:
+  secret: ${JWT_SECRET}
+
+logging:
+  pattern:
+    console: "[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%level] [%thread] [%logger{36}] - %msg%n"

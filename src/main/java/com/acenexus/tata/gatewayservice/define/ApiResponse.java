@@ -1,10 +1,10 @@
 package com.acenexus.tata.gatewayservice.define;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Data
+@Getter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ApiResponse<T> {

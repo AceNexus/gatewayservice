@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -31,14 +30,15 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final List<String> EXCLUDED_PATHS = List.of(
-            "/api/gateway/v1/login",
-            "/api/gateway/v1/refresh/token",
-            "/api/linebot/actuator/health",
-            "/api/linebot/webhook"
+            "/actuator/health",
+            "/actuator/busrefresh" // 由 Spring Security (HTTP Basic) 保護，JWT filter 不重複驗證
     );
 
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public JwtAuthFilter(JwtTokenProvider jwtTokenProvider) {
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -46,7 +46,14 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
         if (isExcludedPath(path)) {
             log.debug("Skipping JWT validation for path: {}", path);
-            return chain.filter(exchange);
+            // 排除路徑仍需清除客戶端偽造的 trust header，防止下游服務誤信
+            ServerHttpRequest sanitizedRequest = exchange.getRequest().mutate()
+                    .headers(headers -> {
+                        headers.remove("X-User-ID");
+                        headers.remove("X-User-Name");
+                    })
+                    .build();
+            return chain.filter(exchange.mutate().request(sanitizedRequest).build());
         }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -58,14 +65,13 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         String token = authHeader.substring(BEARER_PREFIX.length());
 
         try {
-            if (!jwtTokenProvider.validateToken(token)) {
-                log.warn("JWT validation failed for path: {}", path);
-                return onError(exchange, UNAUTHORIZED_MSG, HttpStatus.UNAUTHORIZED);
-            }
-
             Claims claims = jwtTokenProvider.extractAllClaims(token);
 
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
+                    .headers(headers -> {
+                        headers.remove("X-User-ID");
+                        headers.remove("X-User-Name");
+                    })
                     .header("X-User-ID", claims.getSubject())
                     .header("X-User-Name", claims.get("userName", String.class))
                     .build();
@@ -73,7 +79,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange.mutate().request(modifiedRequest).build());
 
         } catch (Exception e) {
-            log.error("JWT processing error for path: {}, reason: {}", path, e.getMessage());
+            log.warn("JWT validation failed for path: {}, reason: {}", path, e.getMessage());
             return onError(exchange, UNAUTHORIZED_MSG, HttpStatus.UNAUTHORIZED);
         }
     }
@@ -103,7 +109,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE;
+        return Ordered.HIGHEST_PRECEDENCE + 1;
     }
 
 }

@@ -1,0 +1,36 @@
+jwt:
+  secret: test-secret-key-for-unit-tests-only-32chars!!
+
+spring:
+  application:
+    name: gatewayservice
+  security:
+    user:
+      name: admin
+      password: password
+  cloud:
+    config:
+      enabled: false
+      import-check:
+        enabled: false
+    bus:
+      enabled: false
+    gateway:
+      routes:
+        # 測試用路由：驗證 JwtAuthFilter 對下游服務路徑的保護行為
+        # JwtAuthFilter 在路由前攔截並回傳 401，不會實際嘗試連線至上游
+        - id: accountservice
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/account/**
+          filters:
+            - StripPrefix=2
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  health:
+    rabbit:
+      enabled: false

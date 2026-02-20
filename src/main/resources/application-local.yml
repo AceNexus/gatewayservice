@@ -1,0 +1,39 @@
+jwt:
+  secret: local-dev-insecure-secret-do-not-use-in-prod!!
+
+spring:
+  security:
+    user:
+      name: ${SECURITY_USERNAME:admin}
+      password: ${SECURITY_PASSWORD:password}
+  cloud:
+    config:
+      enabled: false # 本地環境不連接 Config Server
+    bus:
+      enabled: false # 本地環境不啟用 RabbitMQ Bus
+    gateway:
+      discovery:
+        locator:
+          enabled: false # 不啟用服務發現
+      httpclient:
+        connect-timeout: 5000       # 連線 timeout
+        response-timeout: 10s       # 回應 timeout
+      routes:
+
+eureka:
+  client:
+    enabled: false # 本地環境不使用 Eureka
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    rabbit:
+      enabled: false # 本地環境無 RabbitMQ，停用健康指標
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: WARN

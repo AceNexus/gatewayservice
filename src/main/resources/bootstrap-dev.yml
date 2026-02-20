@@ -1,8 +1,0 @@
-spring:
-  cloud:
-    config:
-      profile: ${SPRING_PROFILES_ACTIVE:dev} # 指定配置環境
-      uri: ${CONFIG_SERVER_URI:http://127.0.0.1:8888/} # 配置中心的位址
-      username: ${CONFIG_SERVER_USERNAME:admin} # 配置中心的認證用戶名
-      password: ${CONFIG_SERVER_PASSWORD:password} # 配置中心的認證密碼
-      fail-fast: true # 啟動時若無法連接配置中心，則立即失敗

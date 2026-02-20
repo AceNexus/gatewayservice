@@ -7,16 +7,14 @@ plugins {
 group = "com.acenexus.tata"
 
 // 讀取 Git Tag 作為 version，沒有 Tag 時預設為 0.0.1-SNAPSHOT
-val gitVersion: String by lazy {
-    try {
-        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
-        process.inputStream.bufferedReader().readText().trim()
-    } catch (e: Exception) {
-        "0.0.1-SNAPSHOT"
-    }
+version = try {
+    val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+            .redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    if (process.waitFor() == 0 && output.isNotEmpty()) output else "0.0.1-SNAPSHOT"
+} catch (_: Exception) {
+    "0.0.1-SNAPSHOT"
 }
-
-version = gitVersion
 
 java {
     toolchain {
@@ -33,18 +31,17 @@ extra["springCloudVersion"] = "2024.0.0"
 dependencies {
     // Spring Boot & Cloud Starters
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.cloud:spring-cloud-starter")
+    implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.cloud:spring-cloud-starter-config")
+    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")
     implementation("org.springframework.cloud:spring-cloud-starter-gateway")
     implementation("org.springframework.cloud:spring-cloud-starter-loadbalancer")
     implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
-    implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
 
     // JWT (jjwt)
-    implementation("io.jsonwebtoken:jjwt-api:0.11.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")
+    implementation("io.jsonwebtoken:jjwt-api:0.12.6")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
     // Lombok
     compileOnly("org.projectlombok:lombok")
@@ -52,6 +49,7 @@ dependencies {
 
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
     testImplementation("io.projectreactor:reactor-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -71,7 +69,7 @@ tasks.jar {
     enabled = false
 }
 
-// 保持 bootJar 任務可用
+// 保持 bootJar 任務可用，固定輸出檔名確保 Dockerfile COPY 路徑一致
 tasks.bootJar {
-    enabled = true
+    archiveFileName.set("gatewayservice.jar")
 }
