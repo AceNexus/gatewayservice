@@ -31,7 +31,9 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private static final List<String> EXCLUDED_PATHS = List.of(
             "/actuator/health",
-            "/actuator/busrefresh" // 由 Spring Security (HTTP Basic) 保護，JWT filter 不重複驗證
+            "/actuator/busrefresh", // 由 Spring Security (HTTP Basic) 保護，JWT filter 不重複驗證
+            "/api/linebot/webhook", // LINE Webhook 不需 JWT
+            "/api/linebot/actuator/health" // nexusbot health check
     );
 
     private final JwtTokenProvider jwtTokenProvider;
