@@ -43,26 +43,28 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
         String httpMethod = request.getMethod().name();
         String requestPath = request.getPath().value();
 
-        // 取得當前 Span 的 traceId，注入 Response Header 讓 client 端可關聯 trace
-        // Spring Boot 3 + Hooks.enableAutomaticContextPropagation() 確保 Reactor context 與 ThreadLocal 同步
-        Span currentSpan = tracer.currentSpan();
-        if (currentSpan != null) {
-            exchange.getResponse().getHeaders().set("X-Trace-Id", currentSpan.context().traceId());
-        }
-
-        // 記錄請求開始
-        log.info("[Request Start] requestId={} | httpMethod={} | requestPath={} | clientIP={}", requestId, httpMethod, requestPath, clientIP);
-
-        // 排除敏感訊息
-        request.getHeaders().forEach((name, values) -> {
-            if (SENSITIVE_HEADERS.contains(name.toLowerCase())) {
-                log.debug("[Request Header] requestId={} | {}=[PROTECTED]", requestId, name);
-            } else {
-                values.forEach(value -> log.debug("[Request Header] requestId={} | {}={}", requestId, name, value));
-            }
-        });
-
         return chain.filter(exchange)
+                .doFirst(() -> {
+                    // doFirst() 在訂閱時執行：Reactor context 已傳播至 ThreadLocal/MDC（自動 context propagation）
+                    // 此時 OTel span 已在 MDC 中，log 可正確印出 traceId/spanId
+                    // 取得當前 Span 的 traceId，注入 Response Header 讓 client 端可關聯 trace
+                    Span currentSpan = tracer.currentSpan();
+                    if (currentSpan != null) {
+                        exchange.getResponse().getHeaders().set("X-Trace-Id", currentSpan.context().traceId());
+                    }
+
+                    // 記錄請求開始
+                    log.info("[Request Start] requestId={} | httpMethod={} | requestPath={} | clientIP={}", requestId, httpMethod, requestPath, clientIP);
+
+                    // 排除敏感訊息
+                    request.getHeaders().forEach((name, values) -> {
+                        if (SENSITIVE_HEADERS.contains(name.toLowerCase())) {
+                            log.debug("[Request Header] requestId={} | {}=[PROTECTED]", requestId, name);
+                        } else {
+                            values.forEach(value -> log.debug("[Request Header] requestId={} | {}={}", requestId, name, value));
+                        }
+                    });
+                })
                 .then(Mono.fromRunnable(() -> {
                     long executionTime = System.currentTimeMillis() - startTimeMillis;
                     ServerHttpResponse response = exchange.getResponse();
