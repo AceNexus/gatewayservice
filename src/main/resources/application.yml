@@ -25,4 +25,7 @@ jwt:
 
 logging:
   pattern:
-    console: "[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%level] [%thread] [%logger{36}] - %msg%n"
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%-5level) [%clr(%t){faint}] [%clr(%logger){cyan}] %m%n%wEx"
+  level:
+    root: INFO
+    org.springframework.security: WARN

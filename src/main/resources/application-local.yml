@@ -32,8 +32,3 @@ management:
   health:
     rabbit:
       enabled: false # 本地環境無 RabbitMQ，停用健康指標
-
-logging:
-  level:
-    root: INFO
-    org.springframework.security: WARN
