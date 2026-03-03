@@ -1,5 +1,7 @@
 package com.acenexus.tata.gatewayservice.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -26,6 +28,12 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(GatewayLoggerFilter.class);
     private static final Set<String> SENSITIVE_HEADERS = Set.of("authorization", "cookie", "jwt", "api-key");
 
+    private final Tracer tracer;
+
+    public GatewayLoggerFilter(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -34,6 +42,13 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
         String clientIP = getClientIP(request);
         String httpMethod = request.getMethod().name();
         String requestPath = request.getPath().value();
+
+        // 取得當前 Span 的 traceId，注入 Response Header 讓 client 端可關聯 trace
+        // Spring Boot 3 + Hooks.enableAutomaticContextPropagation() 確保 Reactor context 與 ThreadLocal 同步
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan != null) {
+            exchange.getResponse().getHeaders().set("X-Trace-Id", currentSpan.context().traceId());
+        }
 
         // 記錄請求開始
         log.info("[Request Start] requestId={} | httpMethod={} | requestPath={} | clientIP={}", requestId, httpMethod, requestPath, clientIP);
@@ -54,10 +69,10 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
                     HttpStatusCode statusCode = response.getStatusCode() != null ? response.getStatusCode() : HttpStatus.INTERNAL_SERVER_ERROR;
 
                     Route route = exchange.getAttribute(GATEWAY_ROUTE_ATTR);
-                    String routeId = route.getId();
+                    String routeId = route != null ? route.getId() : "unknown";
 
                     URI targetUri = exchange.getAttribute(GATEWAY_REQUEST_URL_ATTR);
-                    String target = targetUri.toString();
+                    String target = targetUri != null ? targetUri.toString() : "unknown";
 
                     // 記錄回應日誌
                     if (statusCode.is5xxServerError()) {
@@ -80,10 +95,10 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
      */
     private String getClientIP(ServerHttpRequest request) {
         String xForwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
-        if (!xForwardedFor.isEmpty()) {
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
             return xForwardedFor.split(",")[0].trim();
         }
-        return request.getRemoteAddress().getHostString();
+        return request.getRemoteAddress() != null ? request.getRemoteAddress().getHostString() : "unknown";
     }
 
     @Override
