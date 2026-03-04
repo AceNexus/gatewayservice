@@ -13,6 +13,8 @@ spring:
     user:
       name: ${SECURITY_USERNAME}
       password: ${SECURITY_PASSWORD}
+  reactor:
+    context-propagation: auto   # 對所有 Reactor operator 啟用 context propagation，確保 MDC traceId/spanId 正確傳播
 
 jwt:
   secret: ${JWT_SECRET}

@@ -44,10 +44,11 @@ public class GatewayLoggerFilter implements GlobalFilter, Ordered {
         String requestPath = request.getPath().value();
 
         return chain.filter(exchange)
-                .doFirst(() -> {
-                    // doFirst() 在訂閱時執行：Reactor context 已傳播至 ThreadLocal/MDC（自動 context propagation）
-                    // 此時 OTel span 已在 MDC 中，log 可正確印出 traceId/spanId
-                    // 取得當前 Span 的 traceId，注入 Response Header 讓 client 端可關聯 trace
+                .doOnRequest(demand -> {
+                    // doOnRequest() 在 downstream 發出 request(n) 信號時執行
+                    // 此時 HttpWebHandlerAdapter 的 tap(ObservationSignalListener) 已完成 onSubscribe()
+                    // 即 observation.start() 已被呼叫、OTel span 已建立
+                    // 配合 spring.reactor.context-propagation=auto，自動 context propagation 將 MDC 填入 traceId/spanId
                     Span currentSpan = tracer.currentSpan();
                     if (currentSpan != null) {
                         exchange.getResponse().getHeaders().set("X-Trace-Id", currentSpan.context().traceId());
