@@ -1,0 +1,111 @@
+name: CI - gatewayservice
+
+# push to main   → test + release（完整流程）
+# PR   to main   → test only（編譯 + 測試，作為合併前 gate check）
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write  # GHCR push 需要
+
+env:
+  IMAGE: ghcr.io/acenexus/gatewayservice
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────
+  # Job 1: 編譯 + 單元測試
+  #   - PR 與 main push 都執行
+  #   - 此 job 失敗時 release job 不會啟動
+  # ──────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # gradlew 從 Windows 提交時不帶 execute bit，Linux runner 需手動補上
+      - run: chmod +x gradlew
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle  # 快取 ~/.gradle，加速後續 run
+
+      # build = compileJava + test + bootJar，任一失敗即中止
+      - run: ./gradlew build
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: 打包 Docker Image + 推送 GHCR + 更新 deploy repo
+  #   - 僅 main branch 執行（PR 不進此 job）
+  #   - needs: test 確保測試通過後才執行
+  # ──────────────────────────────────────────────────────────
+  release:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # deploy repo 在此 job 一開始就 checkout，方便最後 push image tag
+      - name: Checkout deploy repo
+        uses: actions/checkout@v4
+        with:
+          repository: AceNexus/deploy
+          path: _deploy
+          token: ${{ secrets.DEPLOY_REPO_PAT }}
+
+      # SHORT_SHA（前 8 碼）作為 Image tag，兼顧可讀性與唯一性
+      - run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      - run: chmod +x gradlew
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # bootJar 只產 JAR，不重跑測試（測試已在 test job 通過）
+      - run: ./gradlew bootJar
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}  # Actions 內建，無需額外設定
+
+      - run: docker build -t ${{ env.IMAGE }}:${{ env.SHORT_SHA }} .
+
+      # Trivy 掃描：HIGH/CRITICAL 漏洞中止流程，ignore-unfixed 避免無法處理的誤報
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      # 推兩個 tag：<sha> 供 ArgoCD 精確指定；latest 供本機手動測試
+      - name: Push image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
+          docker tag  ${{ env.IMAGE }}:${{ env.SHORT_SHA }} ${{ env.IMAGE }}:latest
+          docker push ${{ env.IMAGE }}:latest
+
+      # sed 替換 deployment.yaml 的 image tag → ArgoCD 偵測到變動後自動部署
+      # [skip ci] 防止 deploy repo CI 被觸發（無限循環）
+      # git diff --cached --quiet：re-run 同一 SHA 時跳過 commit，避免 "nothing to commit" 失敗
+      - name: Update deploy repo
+        run: |
+          cd _deploy
+          sed -i "s|image: ghcr.io/acenexus/gatewayservice:.*|image: ${{ env.IMAGE }}:${{ env.SHORT_SHA }}|" \
+            k8s/gatewayservice/deployment.yaml
+          git config user.email "bot@acenexus.dev"
+          git config user.name "acenexus-bot"
+          git add k8s/gatewayservice/deployment.yaml
+          git diff --cached --quiet && echo "image tag unchanged, skip commit" || \
+            (git commit -m "[skip ci] update gatewayservice to ${{ env.SHORT_SHA }}" && git push)

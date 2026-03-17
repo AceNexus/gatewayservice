@@ -208,3 +208,50 @@ git push && git push --tags        # 4. Push（觸發 GitHub Actions 自動部�
 - [Spring Cloud Netflix Eureka 官方文件](https://docs.spring.io/spring-cloud-netflix/docs/current/reference/html/)
 - [Spring Cloud Bus 官方文件](https://docs.spring.io/spring-cloud-bus/docs/current/reference/html/)
 - [Spring Boot Actuator 官方文件](https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html)
+
+---
+
+## 部署
+
+### 建立 K8s Secret
+
+`jwt-secret` 需至少 32 bytes，用以下指令產生：
+```bash
+openssl rand -base64 32
+```
+
+```bash
+kubectl create secret generic gatewayservice-secret -n acenexus \
+  --from-literal=security-username=admin \
+  --from-literal=security-password=password \
+  --from-literal=config-server-username=admin \
+  --from-literal=config-server-password=password \
+  --from-literal=rabbitmq-username=admin \
+  --from-literal=rabbitmq-password=password \
+  --from-literal=jwt-secret=<openssl rand -base64 32 產生的金鑰>
+```
+
+### 建置 Image
+
+```bash
+./gradlew bootJar
+docker build -t gatewayservice:local .
+```
+
+> Java 21 需要指定 JAVA_HOME：
+> ```powershell
+> $env:JAVA_HOME = 'C:\Users\User\.jdks\temurin-21.0.5'; .\gradlew bootJar
+> ```
+
+### 套用 K8s YAML
+
+```bash
+kubectl apply -f k8s/deployment.yaml -n acenexus
+kubectl get pods -n acenexus -w
+```
+
+### 本機存取（port-forward）
+
+```bash
+kubectl port-forward svc/gatewayservice 8080:8080 -n acenexus
+```
