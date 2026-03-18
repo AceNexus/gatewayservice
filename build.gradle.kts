@@ -37,6 +37,7 @@ dependencies {
     implementation("org.springframework.cloud:spring-cloud-starter-gateway")
     implementation("org.springframework.cloud:spring-cloud-starter-loadbalancer")
     implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
+    implementation("com.github.ben-manes.caffeine:caffeine") // 啟用 LoadBalancer Caffeine TTL cache，讓 spring.cloud.loadbalancer.cache.ttl 生效
 
     // JWT (jjwt)
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
