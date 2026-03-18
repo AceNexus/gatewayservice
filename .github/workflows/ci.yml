@@ -4,9 +4,9 @@ name: CI - gatewayservice
 # PR   to main   → test only（編譯 + 測試，作為合併前 gate check）
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -100,4 +100,4 @@ jobs:
           git config user.name "acenexus-bot"
           git add k8s/gatewayservice/deployment.yaml
           git diff --cached --quiet && echo "image tag unchanged, skip commit" || \
-            (git commit -m "[skip ci] update gatewayservice to ${{ env.SHORT_SHA }}" && git push)
+            (git commit -m "[skip ci] update gatewayservice to ${{ env.SHORT_SHA }}" && git pull --rebase && git push)
