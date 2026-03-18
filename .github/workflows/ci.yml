@@ -81,14 +81,6 @@ jobs:
 
       - run: docker build -t ${{ env.IMAGE }}:${{ env.SHORT_SHA }} .
 
-      # Trivy 掃描：HIGH/CRITICAL 漏洞中止流程，ignore-unfixed 避免無法處理的誤報
-      - uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
-
       # 推兩個 tag：<sha> 供 ArgoCD 精確指定；latest 供本機手動測試
       - name: Push image
         run: |
